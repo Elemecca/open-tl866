@@ -14,8 +14,8 @@ class Update2File():
     Block = namedtuple('Block', [
         'crc32',
         'key_index',
-        'checksum',
-        'unknown',
+        'address',
+        'xor_offset',
         'data',
     ])
 
@@ -31,11 +31,11 @@ class Update2File():
             self.block_count
         ) = self.HEADER_FORMAT.unpack(self.raw[:self.HEADER_SIZE])
 
-        if self.signature != self.SIGNATURE:
-            raise ValueError(
-                "incorrect file signature: expected %08x, got %08x"
-                % (self.SIGNATURE, self.signature)
-            )
+        #if self.signature != self.SIGNATURE:
+        #    raise ValueError(
+        #        "incorrect file signature: expected %08x, got %08x"
+        #        % (self.SIGNATURE, self.signature)
+        #    )
 
     def read_block(self, block_idx):
         if block_idx < 0 or block_idx > self.block_count - 1:
@@ -46,19 +46,19 @@ class Update2File():
             self.raw[block_off:block_off + self.BLOCK_SIZE]
         ))
 
-        #checksum = block.checksum
-        #for key_index in range(block.key_index, block.key_index + 264):
-        #    checksum ^= self.key[key_index % 1024]
-        #block = block._replace(checksum = checksum)
+        address = block.address
+        for key_index in range(block.key_index, block.key_index + 44 * 6):
+            address ^= self.key[key_index % 1024]
+        block = block._replace(address = address)
 
-        #repack = self.BLOCK_FORMAT.pack(*block)
-        #actual = binascii.crc32(repack[4:], 0xffffffff) & 0xffffffff
-        #expected = block.crc32 & 0xffffffff
-        #if actual != expected:
-        #    raise RuntimeError(
-        #        "block CRC mismatch: expected %08x, got %08x"
-        #        % (expected, actual)
-        #    )
+        repack = self.BLOCK_FORMAT.pack(*block)
+        actual = binascii.crc32(repack[4:], ~0)
+        expected = block.crc32 ^ 0xffffffff
+        if actual != expected:
+            raise RuntimeError(
+                "block CRC mismatch: expected %08x, got %08x"
+                % (expected, actual)
+            )
 
         return block
 
@@ -67,4 +67,26 @@ class Update2File():
         footer = self.Block._make(self.FOOTER_FORMAT.unpack(
             self.raw[offset:offset + self.FOOTER_SIZE]
         ))
+
+        address = footer.address
+        for key_index in range(footer.key_index, footer.key_index + 514 * 4):
+            address ^= self.key[key_index % 1024]
+        footer = footer._replace(address = address)
+
+        repack = self.FOOTER_FORMAT.pack(*footer)
+        actual = binascii.crc32(repack[4:], ~0)
+        expected = footer.crc32 ^ 0xffffffff
+        if actual != expected:
+            raise RuntimeError(
+                "footer CRC mismatch: expected %08x, got %08x"
+                % (expected, actual)
+            )
+
         return footer
+
+    @property
+    def blocks(self):
+        for idx in range(0, self.block_count):
+            yield self.read_block(idx)
+
+        yield self.read_footer()
