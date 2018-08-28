@@ -90,3 +90,24 @@ class Update2File():
             yield self.read_block(idx)
 
         yield self.read_footer()
+
+    def extract_key(self):
+        key = dict()
+
+        # extract the high byte of each key word
+        # program memory words are 24 bits, so the high byte of each
+        # program word (32 bits / two data words) is always 0
+        for block in self.blocks:
+            for byte_idx in range(3, len(block.data), 4):
+                value = block.data[byte_idx]
+                key_off = (block.xor_offset * 2 + byte_idx) % 512
+                if key_off in key and key[key_off] != value:
+                    raise RuntimeError(
+                        "mismatch in block %02x at %03x (%03x): expected %02x, got %02x"
+                        % (block.xor_offset, byte_idx, key_off, key[key_off], value)
+                    )
+                else:
+                    key[key_off] = block.data[byte_idx]
+
+
+        return key
