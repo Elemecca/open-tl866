@@ -4,9 +4,9 @@ import struct
 
 
 class Update2File():
-    SIGNATURE = 0xF8CC425B
+    SIGNATURE = 0xF8CC
 
-    HEADER_FORMAT = struct.Struct('I 4x 1024s I')
+    HEADER_FORMAT = struct.Struct('BBH 4x 1024s I')
     HEADER_SIZE = HEADER_FORMAT.size
 
     BLOCK_FORMAT = struct.Struct('4I 256s')
@@ -26,16 +26,29 @@ class Update2File():
         self.raw = bytes(source)
 
         (
+            self.version_minor,
+            version_high,
             self.signature,
             self.address_key,
             self.block_count
         ) = self.HEADER_FORMAT.unpack(self.raw[:self.HEADER_SIZE])
 
-        #if self.signature != self.SIGNATURE:
-        #    raise ValueError(
-        #        "incorrect file signature: expected %08x, got %08x"
-        #        % (self.SIGNATURE, self.signature)
-        #    )
+        self.version_major = version_high & 0x0F
+        self.version_hardware = version_high >> 4
+
+        if self.signature != self.SIGNATURE:
+            raise ValueError(
+                "incorrect file signature: expected %04x, got %04x"
+                % (self.SIGNATURE, self.signature)
+            )
+
+    @property
+    def version(self):
+        return ('%02d.%d.%02d' % (
+            self.version_hardware,
+            self.version_major,
+            self.version_minor,
+        ))
 
     def _read_block(self, offset, fmt, address_key_length):
         block = self.Block._make(fmt.unpack(
@@ -61,7 +74,7 @@ class Update2File():
         return block
 
     def read_block(self, block_idx):
-        if block_idx < 0 or block_idx > self.block_count - 1:
+        if block_idx < 0 or block_idx >= self.block_count:
             raise IndexError("invalid block index")
 
         return self._read_block(
