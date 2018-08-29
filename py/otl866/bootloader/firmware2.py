@@ -37,25 +37,20 @@ class Update2File():
         #        % (self.SIGNATURE, self.signature)
         #    )
 
-    def read_block(self, block_idx):
-        if block_idx < 0 or block_idx > self.block_count - 1:
-            raise IndexError("invalid block index")
-
-        block_off = self.HEADER_SIZE + self.BLOCK_SIZE * block_idx
-        block = self.Block._make(self.BLOCK_FORMAT.unpack(
-            self.raw[block_off:block_off + self.BLOCK_SIZE]
+    def _read_block(self, offset, fmt, address_key_length):
+        block = self.Block._make(fmt.unpack(
+            self.raw[offset:offset + fmt.size]
         ))
 
         # decrypt the address field
         address = block.address
         key_offset = block.address_key_offset
-        for key_offset in range(key_offset, key_offset + 44 * 6):
+        for key_offset in range(key_offset, key_offset + address_key_length):
             address ^= self.address_key[key_offset % 1024]
         block = block._replace(address = address)
 
         # verify the block checksum
-        repack = self.BLOCK_FORMAT.pack(*block)
-        actual = binascii.crc32(repack[4:], ~0)
+        actual = binascii.crc32(fmt.pack(*block)[4:], ~0)
         expected = block.crc32 ^ 0xffffffff
         if actual != expected:
             raise RuntimeError(
@@ -65,30 +60,22 @@ class Update2File():
 
         return block
 
+    def read_block(self, block_idx):
+        if block_idx < 0 or block_idx > self.block_count - 1:
+            raise IndexError("invalid block index")
+
+        return self._read_block(
+            offset = self.HEADER_SIZE + self.BLOCK_SIZE * block_idx,
+            fmt = self.BLOCK_FORMAT,
+            address_key_length = 44 * 6,
+        )
+
     def read_footer(self):
-        offset = self.HEADER_SIZE + self.BLOCK_SIZE * self.block_count
-        footer = self.Block._make(self.FOOTER_FORMAT.unpack(
-            self.raw[offset:offset + self.FOOTER_SIZE]
-        ))
-
-        # decrypt the address field
-        address = footer.address
-        key_offset = footer.address_key_offset
-        for key_offset in range(key_offset, key_offset + 514 * 4):
-            address ^= self.address_key[key_offset % 1024]
-        footer = footer._replace(address = address)
-
-        # verify the block checksum
-        repack = self.FOOTER_FORMAT.pack(*footer)
-        actual = binascii.crc32(repack[4:], ~0)
-        expected = footer.crc32 ^ 0xffffffff
-        if actual != expected:
-            raise RuntimeError(
-                "footer CRC mismatch: expected %08x, got %08x"
-                % (expected, actual)
-            )
-
-        return footer
+        return self._read_block(
+            offset = self.HEADER_SIZE + self.BLOCK_SIZE * self.block_count,
+            fmt = self.FOOTER_FORMAT,
+            address_key_length = 514 * 4,
+        )
 
     @property
     def blocks(self):
