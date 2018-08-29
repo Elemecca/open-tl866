@@ -15,7 +15,7 @@ class Update2File():
         'crc32',
         'address_key_offset',
         'address',
-        'xor_key_offset',
+        'data_key_offset',
         'data',
     ])
 
@@ -102,11 +102,11 @@ class Update2File():
         for block in self.blocks:
             for byte_idx in range(3, len(block.data), 4):
                 value = block.data[byte_idx]
-                key_off = (block.xor_key_offset * 2 + byte_idx) % 512
+                key_off = (block.data_key_offset * 2 + byte_idx) % 512
                 if key_off in key and key[key_off] != value:
                     raise RuntimeError(
                         "mismatch in block %02x at %03x (%03x): expected %02x, got %02x"
-                        % (block.xor_key_offset, byte_idx, key_off, key[key_off], value)
+                        % (block.data_key_offset, byte_idx, key_off, key[key_off], value)
                     )
                 else:
                     key[key_off] = block.data[byte_idx]
