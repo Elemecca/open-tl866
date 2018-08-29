@@ -13,9 +13,9 @@ class Update2File():
     BLOCK_SIZE = BLOCK_FORMAT.size
     Block = namedtuple('Block', [
         'crc32',
-        'key_index',
+        'address_key_offset',
         'address',
-        'xor_offset',
+        'xor_key_offset',
         'data',
     ])
 
@@ -47,8 +47,9 @@ class Update2File():
         ))
 
         address = block.address
-        for key_index in range(block.key_index, block.key_index + 44 * 6):
-            address ^= self.key[key_index % 1024]
+        key_offset = block.address_key_offset
+        for key_offset in range(key_offset, key_offset + 44 * 6):
+            address ^= self.key[key_offset % 1024]
         block = block._replace(address = address)
 
         repack = self.BLOCK_FORMAT.pack(*block)
@@ -69,8 +70,9 @@ class Update2File():
         ))
 
         address = footer.address
-        for key_index in range(footer.key_index, footer.key_index + 514 * 4):
-            address ^= self.key[key_index % 1024]
+        key_offset = footer.address_key_offset
+        for key_offset in range(key_offset, key_offset + 514 * 4):
+            address ^= self.key[key_offset % 1024]
         footer = footer._replace(address = address)
 
         repack = self.FOOTER_FORMAT.pack(*footer)
@@ -100,11 +102,11 @@ class Update2File():
         for block in self.blocks:
             for byte_idx in range(3, len(block.data), 4):
                 value = block.data[byte_idx]
-                key_off = (block.xor_offset * 2 + byte_idx) % 512
+                key_off = (block.xor_key_offset * 2 + byte_idx) % 512
                 if key_off in key and key[key_off] != value:
                     raise RuntimeError(
                         "mismatch in block %02x at %03x (%03x): expected %02x, got %02x"
-                        % (block.xor_offset, byte_idx, key_off, key[key_off], value)
+                        % (block.xor_key_offset, byte_idx, key_off, key[key_off], value)
                     )
                 else:
                     key[key_off] = block.data[byte_idx]
