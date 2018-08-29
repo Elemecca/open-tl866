@@ -27,7 +27,7 @@ class Update2File():
 
         (
             self.signature,
-            self.key,
+            self.address_key,
             self.block_count
         ) = self.HEADER_FORMAT.unpack(self.raw[:self.HEADER_SIZE])
 
@@ -46,12 +46,14 @@ class Update2File():
             self.raw[block_off:block_off + self.BLOCK_SIZE]
         ))
 
+        # decrypt the address field
         address = block.address
         key_offset = block.address_key_offset
         for key_offset in range(key_offset, key_offset + 44 * 6):
-            address ^= self.key[key_offset % 1024]
+            address ^= self.address_key[key_offset % 1024]
         block = block._replace(address = address)
 
+        # verify the block checksum
         repack = self.BLOCK_FORMAT.pack(*block)
         actual = binascii.crc32(repack[4:], ~0)
         expected = block.crc32 ^ 0xffffffff
@@ -69,12 +71,14 @@ class Update2File():
             self.raw[offset:offset + self.FOOTER_SIZE]
         ))
 
+        # decrypt the address field
         address = footer.address
         key_offset = footer.address_key_offset
         for key_offset in range(key_offset, key_offset + 514 * 4):
-            address ^= self.key[key_offset % 1024]
+            address ^= self.address_key[key_offset % 1024]
         footer = footer._replace(address = address)
 
+        # verify the block checksum
         repack = self.FOOTER_FORMAT.pack(*footer)
         actual = binascii.crc32(repack[4:], ~0)
         expected = footer.crc32 ^ 0xffffffff
