@@ -3,38 +3,46 @@ import time
 from intelhex import IntelHex
 
 from otl866.bootloader import driver, firmware
+from otl866.bootloader import driver2, firmware2
 from otl866.aclient import AClient
 from otl866 import util
 
 
 def find_dev():
     devs = driver.list_devices()
+    devs2 = driver2.list_devices()
 
-    if len(devs) > 1:
+    if len(devs) + len(devs2) > 1:
         sys.stderr.write("more than one TL866 is connected\n")
         sys.exit(1)
 
-    elif not devs:
-        sys.stderr.write("no TL866 devices were found\n")
-        sys.exit(1)
-
-    else:
+    if devs:
         return driver.BootloaderDriver(devs[0])
+
+    if devs2:
+        return driver2.Bootloader2Driver(devs2[0])
+
+    sys.stderr.write("no TL866 devices were found\n")
+    sys.exit(1)
 
 
 def cmd_identify(args):
     dev = find_dev()
     report = dev.report()
 
-    if report.status == dev.STATUS_BOOTLOADER:
-        sys.stdout.write("TL866%s Bootloader\n" %
-                         ('A' if report.model == dev.MODEL_TL866A else 'CS', ))
+    if report.model == driver2.MODEL_TL866II:
+        if report.firmware_version_major == 1:
+            sys.stdout.write("TL866II-Plus Bootloader")
+        else:
+            sys.stdout.write("TL866II-Plus Stock Firmware v%02d.%d.%02d\n" % (
+                report.hardware_version,
+                report.firmware_version_major,
+                report.firmware_version_minor,
+            ))
 
-    elif report.hardware_version == 255:
-        sys.stdout.write("TL866%s Open Firmware v%d.%d\n" % (
+    elif report.status == dev.STATUS_BOOTLOADER:
+        sys.stdout.write("TL866%s Bootloader\n" % (
             'A' if report.model == dev.MODEL_TL866A else 'CS',
-            report.firmware_version_major,
-            report.firmware_version_minor,
         ))
 
     else:

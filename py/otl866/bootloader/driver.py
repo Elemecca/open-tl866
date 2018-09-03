@@ -98,7 +98,7 @@ class BootloaderDriver():
     MODEL_TL866A = 1
     MODEL_TL866CS = 2
 
-    REPORT_FORMAT = struct.Struct('< xBxxBBB 8s 24s B 4x')
+    REPORT_FORMAT = struct.Struct('< xBxx BBB 8s 24s B 4x')
     Report = namedtuple('Report', [
         'status',
         'firmware_version_minor',
